@@ -1,0 +1,16 @@
+certifi==2025.8.3
+charset-normalizer==3.4.3
+datasketch==1.6.5
+idna==3.10
+joblib==1.5.2
+numpy==1.26.4
+pandas==2.3.3
+pyJoules==0.5.1
+python-dateutil==2.9.0.post0
+pytz==2025.2
+requests==2.32.5
+scikit-surprise==1.1.4
+scipy==1.16.2
+six==1.17.0
+tzdata==2025.2
+urllib3==2.5.0
