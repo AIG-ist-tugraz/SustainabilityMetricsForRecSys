@@ -17,7 +17,7 @@ from datasketch import MinHash, MinHashLSH
 
 
 k = 10
-do_measure_energy = True
+do_measure_energy = False
 relevance_threshold = 3.5
 popularity_threshold = 4
 
@@ -146,6 +146,72 @@ def caluclate_rmse(user_est_true):
         return 999
     return math.sqrt(sum / n)
 
+def recommend_popularity_based(recommendation_approach, products, trainset, testset):
+    if do_measure_energy:
+        domains = [RaplPackageDomain(0), RaplDramDomain(0)]
+        devices = DeviceFactory.create_devices(domains)
+        meter = EnergyMeter(devices)
+
+    if do_measure_energy:
+        ec_build = 0
+        ec_build /= 100000  # energy is in uJ so converting to J
+        save_object("temp_ec_build-" + recommendation_approach, ec_build)
+    else:
+        ec_build = load_object("temp_ec_build-" + recommendation_approach)
+
+
+    top_n = get_top_n_recommendations_popularity_based(trainset, products, n=k)
+    avg_car_f = calculate_avg_car_f(top_n, products)
+    g_i_rec = calculate_g_i_rec(top_n, products)
+
+    if do_measure_energy:
+        meter.start()
+
+    user_est_true = popularity_based_predict_testset(testset, products)
+
+    if do_measure_energy:
+        meter.stop()
+        e_interface = meter.get_trace()[0].energy["package_0"] + meter.get_trace()[0].energy["dram_0"]
+        e_interface /= 100000  # energy is in uJ so converting to J
+        save_object("temp_e_interface-" + recommendation_approach, e_interface)
+    else:
+        e_interface = load_object("temp_e_interface-" + recommendation_approach)
+
+    e_c_rec = calculate_e_c_rec(e_interface, len(testset))
+    e_c_mod_b = calculate_e_c_mod_b(ec_build, 1)  # not sure if this should be 1
+    e_c_mod_b_data = calculate_e_c_mod_b_data(e_c_mod_b, len(products.keys()))
+
+    avg_list_du = calculate_avg_list_d_u(top_n, products)
+    avg_ser_u = calculate_avg_ser_u(top_n, products)
+
+    rmse = caluclate_rmse(user_est_true)
+    precisions, recalls = precision_recall_at_k(None, user_est_true, k=k, threshold=relevance_threshold)
+    precision = sum(prec for prec in precisions.values()) / len(precisions)
+    recall = sum(rec for rec in recalls.values()) / len(recalls)
+
+    res = Result(recommendation_approach, avg_car_f, g_i_rec, e_c_rec, e_c_mod_b, e_c_mod_b_data, avg_list_du, avg_ser_u, rmse, precision, recall)
+    return res
+
+
+def get_top_n_recommendations_popularity_based(trainset, products, n=10):
+    top_n = defaultdict(list)
+
+    items = [(k, v["bw_score"]) for k, v in products.items()]
+    pop_n = sorted(items, key=lambda item: item[1], reverse=True)[:n]
+
+    for user in [trainset.to_raw_uid(uid) for uid in trainset.all_users()]:
+        top_n[user] = pop_n.copy()
+    return top_n
+
+def popularity_based_predict_testset(testset, products):
+    # Get all liked items by the user
+    user_est_true = defaultdict(list)
+    for user_id, item_id, true_rating in testset:
+        if item_id in products:
+            user_est_true[user_id].append((products[item_id]["bw_score"], true_rating))
+
+    return user_est_true
+
 def recommend_content_based(recommendation_approach, products, trainset, testset):
     if do_measure_energy:
         domains = [RaplPackageDomain(0), RaplDramDomain(0)]
@@ -240,14 +306,18 @@ def main():
     print("LabelCoverage(carF):", car_f_label_coverage)
 
     fullResults = FullResults()
-    for iteration in range(10):
+    for iteration in range(1): # 0):
         # sample random trainset and testset
         # test set is made of 25% of the ratings.
         trainset, testset = train_test_split(data, test_size=0.25)
 
-        for recommendation_approach in ["SVD", "KNNWithMeans", "ContentBasedFiltering"]:
+        for recommendation_approach in ["NeuMF"]: #["SVD", "KNNWithMeans", "ContentBasedFiltering", "PopularityBaseline", "NeuMF"]:
             if recommendation_approach == "ContentBasedFiltering":
                 res = recommend_content_based(recommendation_approach, products, trainset, testset)
+            elif recommendation_approach == "PopularityBaseline":
+                res = recommend_popularity_based(recommendation_approach, products, trainset, testset)
+            elif recommendation_approach == "NeuMF":
+                res = recommend_popularity_based(recommendation_approach, products, trainset, testset)
             else:
                 res = surprise_based_recommendations(recommendation_approach, products, trainset, testset)
             fullResults.add_result(recommendation_approach, res)
