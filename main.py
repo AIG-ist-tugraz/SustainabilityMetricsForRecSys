@@ -1,23 +1,25 @@
 from collections import defaultdict
 import random
-
 import numpy as np
-from pandas.compat.pickle_compat import load_reduce
 from pyJoules.device import DeviceFactory
 from pyJoules.device.rapl_device import RaplPackageDomain, RaplDramDomain
-from surprise import accuracy, Dataset, SVD, Reader, KNNWithMeans
+from surprise import accuracy, SVD, Reader, KNNWithMeans
+from surprise import Dataset as SurpriseDataset
 from surprise.model_selection import train_test_split
 import json
 import pandas as pd
 import pickle
-import re
-from pyJoules.energy_meter import measure_energy, EnergyMeter
+from pyJoules.energy_meter import EnergyMeter
 import math
 from datasketch import MinHash, MinHashLSH
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+from scipy.stats import ks_2samp
 
 
 k = 10
-do_measure_energy = False
+do_measure_energy = True
 relevance_threshold = 3.5
 popularity_threshold = 4
 
@@ -146,6 +148,209 @@ def caluclate_rmse(user_est_true):
         return 999
     return math.sqrt(sum / n)
 
+def get_top_n_recommendations_neuMF_based(model, trainset, k=10):
+    model.eval()
+    train_df = pd.DataFrame(trainset.build_testset(), columns=["userID", "itemID", "rating"])
+
+    # Map user/item IDs to integers
+    users = train_df["userID"].unique()
+    items = train_df["itemID"].unique()
+    user2id = {u: i for i, u in enumerate(users)}
+    item2id = {i: j for j, i in enumerate(items)}
+    id2user = {i: u for u, i in user2id.items()}
+    id2item = {j: i for i, j in item2id.items()}
+
+    train_df["user"] = train_df["userID"].map(user2id)
+    train_df["item"] = train_df["itemID"].map(item2id)
+
+    n_users = len(user2id)
+    n_items = len(item2id)
+
+    # Build user->seen items dict
+    user_seen_items = defaultdict(set)
+    for u, i in zip(train_df["user"], train_df["item"]):
+        user_seen_items[u].add(i)
+
+    device = next(model.parameters()).device
+    topk_dict = {}
+    all_items = torch.arange(n_items, device=device)
+
+    with torch.no_grad():
+        for u in range(n_users):
+            user_tensor = torch.full((n_items,), u, dtype=torch.long, device=device)
+            ratings = model(user_tensor, all_items)
+            # mask already seen items
+            seen = list(user_seen_items[u])
+            ratings[seen] = float('-inf')
+            topk_indices = torch.topk(ratings, k).indices.cpu().numpy()
+            topk_list = [(id2item[i], ratings[i].item()) for i in topk_indices]
+            topk_dict[id2user[u]] = topk_list
+
+    return topk_dict
+
+def neuMF_based_predict_testset(model, trainset, testset):
+    model.eval()
+    train_df = pd.DataFrame(trainset.build_testset(), columns=["userID", "itemID", "rating"])
+
+    # Map user/item IDs to integers
+    users = train_df["userID"].unique()
+    items = train_df["itemID"].unique()
+    user2id = {u: i for i, u in enumerate(users)}
+    item2id = {i: j for j, i in enumerate(items)}
+
+    device = next(model.parameters()).device
+    user_est_true = defaultdict(list)
+
+    with torch.no_grad():
+        for uid, iid, true_r in testset:
+            # skip unknown users/items (optional)
+            if uid not in user2id or iid not in item2id:
+                continue
+            u_idx = torch.tensor([user2id[uid]], dtype=torch.long, device=device)
+            i_idx = torch.tensor([item2id[iid]], dtype=torch.long, device=device)
+            pred_r = model(u_idx, i_idx).item()
+            user_est_true[uid].append((pred_r, true_r))
+
+    return user_est_true
+
+def recommend_NeuMF_based(recommendation_approach, products, trainset, testset,  epochs=10, batch_size=64, embedding_size=16, mlp_layers=[32,16,8]):
+    if do_measure_energy:
+        domains = [RaplPackageDomain(0), RaplDramDomain(0)]
+        devices = DeviceFactory.create_devices(domains)
+        meter = EnergyMeter(devices)
+
+    if do_measure_energy:
+        meter.start()
+
+    # --- 1️⃣ Convert Surprise train/test to pandas
+    train_df = pd.DataFrame(trainset.build_testset(), columns=["userID", "itemID", "rating"])
+    test_df = pd.DataFrame(testset, columns=["userID", "itemID", "rating"])
+
+    # Map user/item IDs to integers
+    users = pd.concat([train_df["userID"], test_df["userID"]]).unique()
+    items = pd.concat([train_df["itemID"], test_df["itemID"]]).unique()
+    user2id = {u: i for i, u in enumerate(users)}
+    item2id = {i: j for j, i in enumerate(items)}
+
+    train_df["user"] = train_df["userID"].map(user2id)
+    train_df["item"] = train_df["itemID"].map(item2id)
+    test_df["user"] = test_df["userID"].map(user2id)
+    test_df["item"] = test_df["itemID"].map(item2id)
+
+    n_users = len(user2id)
+    n_items = len(item2id)
+
+    # --- PyTorch Dataset
+    class RatingDataset(Dataset):
+        def __init__(self, df):
+            self.users = torch.tensor(df["user"].values, dtype=torch.long)
+            self.items = torch.tensor(df["item"].values, dtype=torch.long)
+            self.ratings = torch.tensor(df["rating"].values, dtype=torch.float)
+
+        def __len__(self):
+            return len(self.users)
+
+        def __getitem__(self, idx):
+            return self.users[idx], self.items[idx], self.ratings[idx]
+
+    train_dataset = RatingDataset(train_df)
+    test_dataset = RatingDataset(test_df)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+    # --- 3️⃣ NeuMF Model
+    class NeuMF(nn.Module):
+        def __init__(self, n_users, n_items, mf_dim, mlp_layers):
+            super().__init__()
+            # MF embeddings
+            self.user_emb_mf = nn.Embedding(n_users, mf_dim)
+            self.item_emb_mf = nn.Embedding(n_items, mf_dim)
+            # MLP embeddings
+            self.user_emb_mlp = nn.Embedding(n_users, mlp_layers[0] // 2)
+            self.item_emb_mlp = nn.Embedding(n_items, mlp_layers[0] // 2)
+            # MLP
+            layers = []
+            input_size = mlp_layers[0]
+            for output_size in mlp_layers[1:]:
+                layers.append(nn.Linear(input_size, output_size))
+                layers.append(nn.ReLU())
+                input_size = output_size
+            self.mlp = nn.Sequential(*layers)
+            # Final layer
+            self.predict_layer = nn.Linear(mf_dim + mlp_layers[-1], 1)
+
+        def forward(self, user, item):
+            mf_vector = self.user_emb_mf(user) * self.item_emb_mf(item)
+            mlp_vector = torch.cat([self.user_emb_mlp(user), self.item_emb_mlp(item)], dim=-1)
+            mlp_vector = self.mlp(mlp_vector)
+            vector = torch.cat([mf_vector, mlp_vector], dim=-1)
+            rating = self.predict_layer(vector)
+            return rating.squeeze()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = NeuMF(n_users, n_items, embedding_size, mlp_layers).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    criterion = nn.MSELoss()
+
+    # --- 4️⃣ Train
+    model.train()
+    for epoch in range(epochs):
+        total_loss = 0
+        for u, i, r in train_loader:
+            u, i, r = u.to(device), i.to(device), r.to(device)
+            optimizer.zero_grad()
+            pred = model(u, i)
+            loss = criterion(pred, r)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        # print(f"Epoch {epoch+1}: train loss {total_loss/len(train_loader):.4f}")
+
+
+    if do_measure_energy:
+        meter.stop()
+        ec_build = meter.get_trace()[0].energy["package_0"] + meter.get_trace()[0].energy["dram_0"]
+        ec_build /= 100000  # energy is in uJ so converting to J
+        save_object("temp_ec_build-" + recommendation_approach, ec_build)
+    else:
+        ec_build = load_object("temp_ec_build-" + recommendation_approach)
+
+    model.eval()
+
+    top_n = get_top_n_recommendations_neuMF_based(model, trainset, k=k)
+    avg_car_f = calculate_avg_car_f(top_n, products)
+    g_i_rec = calculate_g_i_rec(top_n, products)
+
+    if do_measure_energy:
+        meter.start()
+
+    user_est_true = neuMF_based_predict_testset(model, trainset, testset)
+
+    if do_measure_energy:
+        meter.stop()
+        e_interface = meter.get_trace()[0].energy["package_0"] + meter.get_trace()[0].energy["dram_0"]
+        e_interface /= 100000  # energy is in uJ so converting to J
+        save_object("temp_e_interface-" + recommendation_approach, e_interface)
+    else:
+        e_interface = load_object("temp_e_interface-" + recommendation_approach)
+
+    e_c_rec = calculate_e_c_rec(e_interface, len(testset))
+    e_c_mod_b = calculate_e_c_mod_b(ec_build, epochs)  # not sure if this should be 1
+    e_c_mod_b_data = calculate_e_c_mod_b_data(e_c_mod_b, len(products.keys()))
+
+    avg_list_du = calculate_avg_list_d_u(top_n, products)
+    avg_ser_u = calculate_avg_ser_u(top_n, products)
+
+    rmse = caluclate_rmse(user_est_true)
+    precisions, recalls = precision_recall_at_k(None, user_est_true, k=k, threshold=relevance_threshold)
+    precision = sum(prec for prec in precisions.values()) / len(precisions)
+    recall = sum(rec for rec in recalls.values()) / len(recalls)
+
+    res = Result(recommendation_approach, avg_car_f, g_i_rec, e_c_rec, e_c_mod_b, e_c_mod_b_data, avg_list_du, avg_ser_u, rmse, precision, recall)
+    return res
+
 def recommend_popularity_based(recommendation_approach, products, trainset, testset):
     if do_measure_energy:
         domains = [RaplPackageDomain(0), RaplDramDomain(0)]
@@ -191,7 +396,6 @@ def recommend_popularity_based(recommendation_approach, products, trainset, test
 
     res = Result(recommendation_approach, avg_car_f, g_i_rec, e_c_rec, e_c_mod_b, e_c_mod_b_data, avg_list_du, avg_ser_u, rmse, precision, recall)
     return res
-
 
 def get_top_n_recommendations_popularity_based(trainset, products, n=10):
     top_n = defaultdict(list)
@@ -285,6 +489,9 @@ def main():
     data = load_object("ratings-data-reduced")
     products = load_object("extracted-products-reduced-supplemented")
 
+    random_seeds = [42, 7, 13, 21, 69, 123, 256, 512, 1024, 2025, 38, 72] # These are just give some convenience
+    num_iterations = 10
+
     green_label_coverage = 0
     green_sum = 0
     car_f_label_coverage = 0
@@ -306,23 +513,46 @@ def main():
     print("LabelCoverage(carF):", car_f_label_coverage)
 
     fullResults = FullResults()
-    for iteration in range(1): # 0):
+    for iteration in range(num_iterations):
+        print("Starting iteration", (iteration + 1), "of", num_iterations)
         # sample random trainset and testset
         # test set is made of 25% of the ratings.
-        trainset, testset = train_test_split(data, test_size=0.25)
-
-        for recommendation_approach in ["NeuMF"]: #["SVD", "KNNWithMeans", "ContentBasedFiltering", "PopularityBaseline", "NeuMF"]:
+        trainset, testset = train_test_split(data, test_size=0.25, random_state=random_seeds[iteration])
+        for recommendation_approach in ["SVD", "KNNWithMeans", "ContentBasedFiltering", "PopularityBaseline", "NeuMF"]:
+            print("Starting Approach", recommendation_approach)
             if recommendation_approach == "ContentBasedFiltering":
                 res = recommend_content_based(recommendation_approach, products, trainset, testset)
             elif recommendation_approach == "PopularityBaseline":
                 res = recommend_popularity_based(recommendation_approach, products, trainset, testset)
             elif recommendation_approach == "NeuMF":
-                res = recommend_popularity_based(recommendation_approach, products, trainset, testset)
+                res = recommend_NeuMF_based(recommendation_approach, products, trainset, testset)
             else:
                 res = surprise_based_recommendations(recommendation_approach, products, trainset, testset)
             fullResults.add_result(recommendation_approach, res)
     save_object("fullResults", fullResults)
     fullResults.print_averages()
+
+def get_top_n_recommendations_new(algo, trainset, n=10):
+    top_n = defaultdict(list)
+
+    for uid in [trainset.to_raw_uid(inner_uid) for inner_uid in trainset.all_users()]:
+        target_inner_uid = trainset.to_inner_uid(uid)
+        rated_inner_iids = {inner_iid for inner_iid, _ in trainset.ur[target_inner_uid]}
+
+        user_specific_inverted_set = []
+        for inner_iid in trainset.all_items():
+            if inner_iid not in rated_inner_iids:
+                raw_iid = trainset.to_raw_iid(inner_iid)
+                user_specific_inverted_set.append((uid, raw_iid, trainset.global_mean))
+
+        predictions = algo.test(user_specific_inverted_set)
+        user_ratings = []
+        for uid, iid, true_r, est, _ in predictions:
+            user_ratings.append((iid, est))
+
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+        top_n[uid] = user_ratings[:n]
+    return top_n
 
 def surprise_based_recommendations(recommendation_approach, products, trainset, testset):
     if do_measure_energy:
@@ -346,11 +576,7 @@ def surprise_based_recommendations(recommendation_approach, products, trainset, 
     else:
         ec_build = load_object("temp_ec_build-" + recommendation_approach)
 
-    inverted_set = trainset.build_anti_testset()
-
-    predictions = algo.test(inverted_set)
-    top_n = get_top_n_recommendations(predictions, n=k)
-
+    top_n = get_top_n_recommendations_new(algo, trainset, n=k)
 
     avg_car_f = calculate_avg_car_f(top_n, products)
     g_i_rec = calculate_g_i_rec(top_n, products)
@@ -372,9 +598,7 @@ def surprise_based_recommendations(recommendation_approach, products, trainset, 
 
     avg_list_du = calculate_avg_list_d_u(top_n, products)
     avg_ser_u = calculate_avg_ser_u(top_n, products)
-
     precisions, recalls = precision_recall_at_k(predictions, None, k=k, threshold=relevance_threshold)
-
     rmse = accuracy.rmse(predictions, verbose=False)
     precision = sum(prec for prec in precisions.values()) / len(precisions)
     recall = sum(rec for rec in recalls.values()) / len(recalls)
@@ -507,9 +731,12 @@ def transforming_data(min = False):
     }
 
     with open("Toys_and_Games.jsonl", 'r') as f:
+        print("Processing data...")
         i = 0
         for line in f:
             json_data = json.loads(line)
+            if i % 1000 == 0:
+                print("Processed " + str(i) + " lines")
             if json_data["verified_purchase"]:
                 ratings_dict["itemID"].append(json_data["asin"])
                 ratings_dict["userID"].append(json_data["user_id"])
@@ -521,18 +748,23 @@ def transforming_data(min = False):
 
     reader = Reader(rating_scale=(1, 5))
 
-    data = Dataset.load_from_df(df[["userID", "itemID", "rating"]], reader)
-    save_object("ratings-data" + "-min" if min else "", data)
+    data = SurpriseDataset.load_from_df(df[["userID", "itemID", "rating"]], reader)
+    save_object("ratings-data" + ("-min" if min else ""), data)
 
 def bayesian_weighted_score(R, v, C, m):
     return (v / (v + m)) * R + (m / (v + m)) * C
 
 def transforming_meta_data():
+    print("Transforming meta data...")
+    i = 0
     products = {}
     with open("meta_Toys_and_Games.jsonl", 'r') as f:
         ar = []
         nr = []
         for line in f:
+            i += 1
+            if i % 1000 == 0:
+                print("Processed " + str(i) + " lines")
             json_data = json.loads(line)
             id = json_data["parent_asin"]
             ar.append(json_data["average_rating"])
@@ -544,6 +776,7 @@ def transforming_meta_data():
             }
             products.update({id: item})
 
+        print("Calculating bw_score...")
         # Global mean and prior strength
         C = np.mean(np.array(ar))
         # Choose m as, e.g., the 80th percentile of vote counts (common heuristic)
@@ -562,31 +795,82 @@ def reduce_data():
     user_counts = df.groupby("user").size()
 
     # Filter users who have rated 16 or more items
-    eligible_users = user_counts[user_counts >= 16].index
+    filtered_users = user_counts[user_counts >= 16].index
 
-    # Randomly select 1,000 users (or fewer if not enough users meet the condition)
-    selected_users = random.sample(list(eligible_users), min(1000, len(eligible_users)))
+    filtered_df = df[df['user'].isin(list(filtered_users))]
+    filtered_df = filtered_df.drop(columns=["timestamp"])
+
+    # Randomly select 10,000 users (or fewer if not enough users meet the condition)
+    sampled_users = random.sample(list(filtered_users), min(10000, len(filtered_users)))
 
     # Filter the DataFrame to only include ratings from selected users
-    filtered_df = df[df['user'].isin(selected_users)]
+    sampled_df = df[df['user'].isin(sampled_users)]
 
     # Drop timestamp column Surprise doesn't use it
-    filtered_df = filtered_df.drop(columns=["timestamp"])
+    sampled_df = sampled_df.drop(columns=["timestamp"])
+
+    ############################
+    random_state = 42
+
+    # 2) original rating proportions
+    props = df["rating"].value_counts(normalize=True)
+
+    # 3) desired counts at user-sample size
+    desired = (props * len(sampled_df)).round().astype(int)
+
+    # 4) available counts in user sample
+    available = sampled_df["rating"].value_counts()
+
+    # 5) cap desired by availability (this is the key relaxation)
+    target = (
+        desired
+        .to_frame("desired")
+        .join(available.rename("available"), how="left")
+        .fillna(0)
+        .astype(int)
+    )
+    target["n"] = target[["desired", "available"]].min(axis=1)
+
+    # 6) sample
+    stratified_sampled_df = (
+        sampled_df
+        .groupby("rating", group_keys=False)
+        .apply(lambda g: g.sample(
+            n=target.loc[g.name, "n"],
+            random_state=random_state
+        ))
+        .sample(frac=1, random_state=random_state)
+        .reset_index(drop=True)
+    )
+
+    ############################
 
     # Convert back to Surprise Dataset
     reader = Reader(rating_scale=(df["rating"].min(), df["rating"].max()))
-    filtered_data = Dataset.load_from_df(filtered_df, reader)
 
-    save_object("ratings-data-reduced", filtered_data)
+    filtered_data = SurpriseDataset.load_from_df(filtered_df, reader)
+    sampled_data = SurpriseDataset.load_from_df(stratified_sampled_df, reader)
+
+    save_object("ratings-data-user-interaction", filtered_data)
+    save_object("ratings-data-reduced", sampled_data)
+
     products = load_object("extracted-products")
-    valid_product_ids = set(filtered_data.df["item"].unique())
+    filtered_valid_product_ids = set(filtered_data.df["item"].unique())
+    sampled_valid_product_ids = set(sampled_data.df["item"].unique())
 
     # Filter the product_dict to include only valid items
+
     filtered_product_dict = {
         pid: pdata for pid, pdata in products.items()
-        if pid in valid_product_ids
+        if pid in filtered_valid_product_ids
     }
-    save_object("extracted-products-reduced", filtered_product_dict)
+
+    sampled_product_dict = {
+        pid: pdata for pid, pdata in products.items()
+        if pid in sampled_valid_product_ids
+    }
+    save_object("extracted-products-user-interaction", filtered_product_dict)
+    save_object("extracted-products-reduced", sampled_product_dict)
 
 
 def count_dict_key(counting_dict, key):
@@ -679,7 +963,6 @@ def get_top_n_recommendations(predictions, n=10):
 
 def testing_stuff():
     return
-
 
 class Result:
     def __init__(self, recommendation_approach, AvgCarFI, GIRec, ECRec, ECTrain, ECPDat, AvgListDu, AvgSERu, RMSE, Precision, Recall):
@@ -791,6 +1074,120 @@ class FullResults:
             print("MEDI", np.median(a))
             print("=======================================================")
 
+def print_dataset_stats():
+    print("Dataset statistics:")
+    full_rating_data = load_object("ratings-data")
+    full_products = load_object("extracted-products")
+
+    # Do the commented out code once to generate the intermediary files
+    # df = pd.DataFrame(full_rating_data.raw_ratings, columns=["user", "item", "rating", "timestamp"])
+    #
+    # # Count number of ratings per user
+    # user_counts = df.groupby("user").size()
+    #
+    # # Filter users who have rated 16 or more items
+    # eligible_users = user_counts[user_counts >= 16].index
+    #
+    # # Filter the DataFrame to only include ratings from selected users
+    # filtered_df = df[df['user'].isin(eligible_users)]
+    #
+    # # Drop timestamp column Surprise doesn't use it
+    # filtered_df = filtered_df.drop(columns=["timestamp"])
+    #
+    # # Convert back to Surprise Dataset
+    # reader = Reader(rating_scale=(df["rating"].min(), df["rating"].max()))
+    # filtered_data = SurpriseDataset.load_from_df(filtered_df, reader)
+    #
+    # save_object("ratings-data-user-interaction", filtered_data)
+    # valid_product_ids = set(filtered_data.df["item"].unique())
+    #
+    # # Filter the product_dict to include only valid items
+    # filtered_product_dict = {
+    #     pid: pdata for pid, pdata in full_products.items()
+    #     if pid in valid_product_ids
+    # }
+    # save_object("extracted-products-user-interaction", filtered_product_dict)
+
+    filtered_rating_data = load_object("ratings-data-user-interaction")
+    filtered_products = load_object("extracted-products-user-interaction")
+
+    sampled_rating_data = load_object("ratings-data-reduced")
+    sampled_products = load_object("extracted-products-reduced")
+
+
+    print("\n")
+    print_product_stats("Full Product Set", full_products)
+    print_rating_stats("Full Rating Set", full_rating_data)
+    print("\n")
+
+    print("\n")
+    print_product_stats("Filtered Product Set", filtered_products)
+    print_rating_stats("Filtered Rating Set", filtered_rating_data)
+    print("\n")
+
+    print("\n")
+    print_product_stats("Sampled Product Set", sampled_products)
+    print_rating_stats("Sampled Rating Set", sampled_rating_data)
+    print("\n")
+
+    print("Kolmogorov-Smirnov test:")
+    print("User Ratings")
+    fullvfiltered = ks_2samp(full_rating_data.df["rating"].tolist(), filtered_rating_data.df["rating"].tolist())
+    fullvsampled = ks_2samp(full_rating_data.df["rating"].tolist(), sampled_rating_data.df["rating"].tolist())
+    filteredvsampled = ks_2samp(filtered_rating_data.df["rating"].tolist(), sampled_rating_data.df["rating"].tolist())
+    print("Full VS Filtered: ", fullvfiltered.statistic, "pvalue=", fullvfiltered.pvalue)
+    print("Full VS Sampled: ", fullvsampled.statistic, "pvalue=", fullvsampled.pvalue)
+    print("Filtered VS Sampled: ", filteredvsampled.statistic, "pvalue=", filteredvsampled.pvalue)
+
+    print("Product Average Ratings")
+    fullvfiltered = ks_2samp([d["average_rating"] for d in full_products.values()], [d["average_rating"] for d in filtered_products.values()])
+    fullvsampled =  ks_2samp([d["average_rating"] for d in full_products.values()], [d["average_rating"] for d in sampled_products.values()])
+    filteredvsampled =  ks_2samp([d["average_rating"] for d in filtered_products.values()], [d["average_rating"] for d in sampled_products.values()])
+    print("Full VS Filtered: ", fullvfiltered.statistic, "pvalue=", fullvfiltered.pvalue)
+    print("Full VS Sampled: ", fullvsampled.statistic, "pvalue=", fullvsampled.pvalue)
+    print("Filtered VS Sampled: ", filteredvsampled.statistic, "pvalue=", filteredvsampled.pvalue)
+
+    print("Product Weighted Average Ratings")
+    fullvfiltered = ks_2samp([d["bw_score"] for d in full_products.values()], [d["bw_score"] for d in filtered_products.values()])
+    fullvsampled =  ks_2samp([d["bw_score"] for d in full_products.values()], [d["bw_score"] for d in sampled_products.values()])
+    filteredvsampled =  ks_2samp([d["bw_score"] for d in filtered_products.values()], [d["bw_score"] for d in sampled_products.values()])
+    print("Full VS Filtered: ", fullvfiltered.statistic, "pvalue=", fullvfiltered.pvalue)
+    print("Full VS Sampled: ", fullvsampled.statistic, "pvalue=", fullvsampled.pvalue)
+    print("Filtered VS Sampled: ", filteredvsampled.statistic, "pvalue=", filteredvsampled.pvalue)
+
+
+def print_rating_stats(rating_data_name, rating_data):
+    print(rating_data_name)
+    df = rating_data.df
+    df.columns=["userID", "itemID", "rating"]
+    N = len(df)
+    repeated_interactions = df.duplicated(['userID', 'itemID']).sum()
+    U = df['userID'].nunique()
+    I = df['itemID'].nunique()
+    density = N / (U * I)
+    density_unique = (N - repeated_interactions) / (U * I)
+    mean_rating = df['rating'].mean()
+    print("All interactions: " + str(N))
+    print("Repeated interactions: " + str(repeated_interactions))
+    print("Users: " + str(U))
+    print("Items: " + str(I))
+    print("Density: " + str(density))
+    print("Density (Unique): " + str(density_unique))
+    print("Mean Rating: " + str(mean_rating))
+    print("Rating numbers:")
+    print(df['rating'].value_counts().sort_index())
+    print("Rating Frequencies")
+    print(df['rating'].value_counts(normalize=True))
+
+def print_product_stats(product_data_name, product_data):
+    print(product_data_name)
+    N = len(product_data)
+    average_rating = sum(d["average_rating"] for d in product_data.values()) / N
+    average_bw_score = sum(d["bw_score"] for d in product_data.values()) / N
+    print("Number of products: " + str(N))
+    print("Average rating: " + str(average_rating))
+    print("Average bw_score: " + str(average_bw_score))
+
 
 if __name__ == "__main__":
 
@@ -800,4 +1197,5 @@ if __name__ == "__main__":
 
     # Note that the supplemented product data was extended by the LLM sourced green flag and the Carbon footprint estimated by https://github.com/amazon-science/carbon-assessment-with-ml as discribed in the paper
 
+    print_dataset_stats()
     main()

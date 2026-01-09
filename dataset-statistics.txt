@@ -1,0 +1,110 @@
+Dataset statistics:
+
+
+Full Product Set
+Number of products: 890874
+Average rating: 4.275251831347643
+Average bw_score: 4.311141799082732
+Full Rating Set
+All interactions: 14859195
+Repeated interactions: 159663
+Users: 7678450
+Items: 975884
+Density: 1.9830036967669085e-06
+Density (Unique): 1.9616961953015264e-06
+Mean Rating: 4.22300339957851
+Rating numbers:
+rating
+1.0     1466382
+2.0      695962
+3.0     1002436
+4.0     1587258
+5.0    10107157
+Name: count, dtype: int64
+Rating Frequencies
+rating
+5.0    0.680195
+4.0    0.106820
+1.0    0.098685
+3.0    0.067462
+2.0    0.046837
+Name: proportion, dtype: float64
+
+
+
+
+Filtered Product Set
+Number of products: 242952
+Average rating: 4.401763722875301
+Average bw_score: 4.351063322776956
+Filtered Rating Set
+All interactions: 1024690
+Repeated interactions: 20037
+Users: 40439
+Items: 298610
+Density: 8.485701348930543e-05
+Density (Unique): 8.319770191284307e-05
+Mean Rating: 4.545982687446935
+Rating numbers:
+rating
+1.0     34638
+2.0     27256
+3.0     61431
+4.0    122045
+5.0    779320
+Name: count, dtype: int64
+Rating Frequencies
+rating
+5.0    0.760542
+4.0    0.119104
+3.0    0.059951
+1.0    0.033803
+2.0    0.026599
+Name: proportion, dtype: float64
+
+
+
+
+Sampled Product Set
+Number of products: 96859
+Average rating: 4.426266015548374
+Average bw_score: 4.3838691694808665
+Sampled Rating Set
+All interactions: 231324
+Repeated interactions: 4317
+Users: 10000
+Items: 121288
+Density: 0.00019072290745993008
+Density (Unique): 0.00018716361057977707
+Mean Rating: 4.515856547526413
+Rating numbers:
+rating
+1.0      8502
+2.0      6693
+3.0     15326
+4.0     27255
+5.0    173548
+Name: count, dtype: int64
+Rating Frequencies
+rating
+5.0    0.750238
+4.0    0.117822
+3.0    0.066253
+1.0    0.036754
+2.0    0.028933
+Name: proportion, dtype: float64
+
+
+Kolmogorov-Smirnov test:
+User Ratings
+Full VS Filtered:  0.09263114720329187 pvalue= 0.0
+Full VS Sampled:  0.0810441382123632 pvalue= 0.0
+Filtered VS Sampled:  0.011587008990928668 pvalue= 1.9468427772699726e-22
+Product Average Ratings
+Full VS Filtered:  0.08435726224224033 pvalue= 0.0
+Full VS Sampled:  0.11467972450347683 pvalue= 0.0
+Filtered VS Sampled:  0.03330993721117759 pvalue= 3.4265503536989394e-67
+Product Weighted Average Ratings
+Full VS Filtered:  0.16176078588677745 pvalue= 0.0
+Full VS Sampled:  0.2572408133882667 pvalue= 0.0
+Filtered VS Sampled:  0.10153870207169802 pvalue= 0.0

@@ -1,176 +1,335 @@
-AvgCarFAllProducts: 7.859085057472018
-AvgCarFaltAllProducts: 8.284966496022067
-AvgGreenAllProducts: 0.11637154395775086
-LabelCoverage(green): 0.9978301301921885
-LabelCoverage(carF): 0.9978301301921885
-LabelCoverage(carF_alt): 0.6134531928084315
+WARNING:root:pynvml not found you can't use NVIDIA devices
+AvgCarFAllProducts: 7.908967534764311
+AvgGreenAllProducts: 0.06718012781465842
+LabelCoverage(green): 1.0
+LabelCoverage(carF): 0.5779741686368846
+Starting iteration 1 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 2 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 3 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 4 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 5 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 6 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 7 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 8 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 9 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
+Starting iteration 10 of 10
+Starting Approach SVD
+Starting Approach KNNWithMeans
 Computing the msd similarity matrix...
 Done computing similarity matrix.
+Starting Approach ContentBasedFiltering
+Starting Approach PopularityBaseline
+Starting Approach NeuMF
 =======================================================
 Recommendation approach:  SVD
 ==============================
 Sustainability Metrics =======
 AvgCarFI [kgCO2]: ============
-MEAN 8.412888769476638
-STDD 0.7407258019531523
-MEDI 8.577477438820654
+MEAN 9.074034016794396
+STDD 0.9090474170524754
+MEDI 8.801728264234548
 GIRec: =======================
-MEAN 0.15546820214141124
-STDD 0.015125953902106725
-MEDI 0.15453979677732077
+MEAN 0.15565002528829147
+STDD 0.031008631849916566
+MEDI 0.16319968770104407
 ECRec: =======================
-MEAN 0.03410665690642903
-STDD 0.002265241237801171
-MEDI 0.03437438892425207
+MEAN 0.0003979058636371496
+STDD 3.9570006615973044e-05
+MEDI 0.0003924620878075773
 ECTrain: =====================
-MEAN 21.393197999999998
-STDD 2.812292843154141
-MEDI 20.5749
+MEAN 180.664512
+STDD 31.16968533642064
+MEDI 170.315415
 ECPDat: ======================
-MEAN 0.001320126620508057
-STDD 0.00017422203358778585
-MEDI 0.001267781415359886
+MEAN 0.0018137507608586376
+STDD 0.00031229800675938263
+MEDI 0.0017100333308976562
 AvgListDu: ===================
-MEAN 0.6993195225598916
-STDD 0.0046646343507408
-MEDI 0.6991288618634453
+MEAN 0.7548756133394565
+STDD 0.016420012046407535
+MEDI 0.7566060722259423
 AvgSERu: =====================
-MEAN 0.013676865079365077
-STDD 0.008939954546336604
-MEDI 0.009591468253968252
+MEAN 0.0030750158730158787
+STDD 0.002139032992186052
+MEDI 0.002366507936507935
 Conventional Metrics =========
 RMSE: ========================
-MEAN 0.8696069927082861
-STDD 0.012651171206554327
-MEDI 0.8720672054161818
+MEAN 0.905398777739493
+STDD 0.0033887488798266226
+MEDI 0.9050890657227348
 Precision@K=10: ==============
-MEAN 0.8687177450505107
-STDD 0.004085050631985889
-MEDI 0.8686880422375682
+MEAN 0.8638664407625447
+STDD 0.0015209290972213944
+MEDI 0.8645839836020677
 Recall@K=10: =================
-MEAN 0.9493564530203102
-STDD 0.003231393539005475
-MEDI 0.9489301753434108
+MEAN 0.950886042437506
+STDD 0.0007766002389803557
+MEDI 0.950941342689134
 F1@K=10: =====================
-MEAN 0.9072411613014963
-STDD 0.0026726687513552168
-MEDI 0.907576968625193
+MEAN 0.9052890848323983
+STDD 0.0009274711474375866
+MEDI 0.905311502583451
 =======================================================
 =======================================================
 Recommendation approach:  KNNWithMeans
 ==============================
 Sustainability Metrics =======
 AvgCarFI [kgCO2]: ============
-MEAN 7.47108678850296
-STDD 0.784080540430874
-MEDI 7.437982289668069
+MEAN 8.089611673722723
+STDD 1.1758620460982334
+MEDI 7.841191448927487
 GIRec: =======================
-MEAN 0.14568155330737723
-STDD 0.025637144093504587
-MEDI 0.14345812112932307
+MEAN 0.10366136559372992
+STDD 0.02400305907204231
+MEDI 0.09477428020085496
 ECRec: =======================
-MEAN 0.036520473106301715
-STDD 0.002809919272204301
-MEDI 0.03786141629535328
+MEAN 0.0005791269734225587
+STDD 6.6466383244527e-05
+MEDI 0.0005686298870847815
 ECTrain: =====================
-MEAN 3.818898
-STDD 0.8128962761115345
-MEDI 3.936145
+MEAN 93.854682
+STDD 2.0845446979319
+MEDI 92.93312
 ECPDat: ======================
-MEAN 0.0002356797319118729
-STDD 5.028138132720902e-05
-MEDI 0.000242600942789874
+MEAN 0.0009422747742004545
+STDD 2.080312916501966e-05
+MEDI 0.0009335849154774411
 AvgListDu: ===================
-MEAN 0.6485940492888952
-STDD 0.015262817901607982
-MEDI 0.6473057622558231
+MEAN 0.7417315601399508
+STDD 0.007658387468208873
+MEDI 0.744536383365977
 AvgSERu: =====================
-MEAN 0.010917936507936502
-STDD 0.002636888529337208
-MEDI 0.010831547619047614
+MEAN 0.008052551587301612
+STDD 0.001520216832255504
+MEDI 0.008568273809523835
 Conventional Metrics =========
 RMSE: ========================
-MEAN 0.9317329393551352
-STDD 0.011308757658677749
-MEDI 0.9340011892630117
+MEAN 0.958858393165821
+STDD 0.0033671954393403366
+MEDI 0.9586445378377628
 Precision@K=10: ==============
-MEAN 0.8751750063614312
-STDD 0.004825412488225443
-MEDI 0.8741593829106362
+MEAN 0.8649046311486085
+STDD 0.0014943935189803287
+MEDI 0.8652010427708334
 Recall@K=10: =================
-MEAN 0.9527211824541876
-STDD 0.003014571743650443
-MEDI 0.9538819685453546
+MEAN 0.9376352507495817
+STDD 0.0012196669956469194
+MEDI 0.9382431897732004
 F1@K=10: =====================
-MEAN 0.9122947935463334
-STDD 0.003087053891959364
-MEDI 0.9122527097180925
+MEAN 0.8998013279792245
+STDD 0.0008587862239502484
+MEDI 0.8997563046535348
 =======================================================
 =======================================================
 Recommendation approach:  ContentBasedFiltering
 ==============================
 Sustainability Metrics =======
 AvgCarFI [kgCO2]: ============
-MEAN 9.2650868514565
-STDD 0.29309463113344725
-MEDI 9.265477841128874
+MEAN 9.524141033064527
+STDD 0.06297078214468257
+MEDI 9.539252935748538
 GIRec: =======================
-MEAN 0.13540397228770243
-STDD 0.0027817630399077546
-MEDI 0.13479763447972654
+MEAN 0.06340872672211452
+STDD 0.0006136257570322763
+MEDI 0.0634658120692079
 ECRec: =======================
-MEAN 0.7146544344366645
-STDD 0.05221708135481738
-MEDI 0.7383840253023553
+MEAN -4.229740448773148
+STDD 18.10080810789602
+MEDI 4.7959980052221125
 ECTrain: =====================
-MEAN 2142.516428
-STDD 159.7216511978778
-MEDI 2232.62978
+MEAN 13270.445277
+STDD 100.79113614680152
+MEDI 13243.71213
 ECPDat: ======================
-MEAN 0.13282804885306881
-STDD 0.009902148245373704
-MEDI 0.13841474147551147
+MEAN 0.13700786996562014
+STDD 0.001040596497453014
+MEDI 0.13673186931519013
 AvgListDu: ===================
-MEAN 0.15387594897959203
-STDD 0.00342520654371344
-MEDI 0.154362999438833
+MEAN 0.09673062871572943
+STDD 0.0005908182835243772
+MEDI 0.09690074162257548
 AvgSERu: =====================
-MEAN 0.03331000000000013
-STDD 0.0020632256299300154
-MEDI 0.033150000000000145
+MEAN 0.0370387222222225
+STDD 0.0005080533412260093
+MEDI 0.03710500000000021
 Conventional Metrics =========
 RMSE: ========================
-MEAN 0.9226354809033348
-STDD 0.014491822843229207
-MEDI 0.9219008750870898
+MEAN 0.9591733101773429
+STDD 0.005140559530362097
+MEDI 0.9613219250575147
 Precision@K=10: ==============
-MEAN 0.8745800548125148
-STDD 0.0038150558421234815
-MEDI 0.8720069101412757
+MEAN 0.8670726776986468
+STDD 0.0014241751773314954
+MEDI 0.8676460507317835
 Recall@K=10: =================
-MEAN 0.9538753001675095
-STDD 0.002028964178054926
-MEDI 0.9543992770182043
+MEAN 0.9489662937601343
+STDD 0.00141007616522466
+MEDI 0.9486511692239523
 F1@K=10: =====================
-MEAN 0.9125038711904448
-STDD 0.002458026185990893
-MEDI 0.9116285432416915
+MEAN 0.9061720435974884
+STDD 0.0010730575124743116
+MEDI 0.9064413828020794
+=======================================================
+=======================================================
+Recommendation approach:  PopularityBaseline
+==============================
+Sustainability Metrics =======
+AvgCarFI [kgCO2]: ============
+MEAN 7.340769748751169
+STDD 8.881784197001252e-16
+MEDI 7.34076974875117
+GIRec: =======================
+MEAN 0.29999999999999993
+STDD 5.551115123125783e-17
+MEDI 0.3
+ECRec: =======================
+MEAN 5.5674620878075775e-05
+STDD 1.1250975763185374e-05
+MEDI 5.457488198371116e-05
+ECTrain: =====================
+MEAN 0.0
+STDD 0.0
+MEDI 0.0
+ECPDat: ======================
+MEAN 0.0
+STDD 0.0
+MEDI 0.0
+AvgListDu: ===================
+MEAN 0.7816137566139679
+STDD 0.0
+MEDI 0.7816137566139679
+AvgSERu: =====================
+MEAN 0.0
+STDD 0.0
+MEDI 0.0
+Conventional Metrics =========
+RMSE: ========================
+MEAN 0.9755988483058642
+STDD 0.004848810885032741
+MEDI 0.9779904916543405
+Precision@K=10: ==============
+MEAN 0.8630643645307942
+STDD 0.0013132182551372988
+MEDI 0.8633094831226977
+Recall@K=10: =================
+MEAN 0.9594455848410451
+STDD 0.0013800087286996335
+MEDI 0.959412347802415
+F1@K=10: =====================
+MEAN 0.9087058572673035
+STDD 0.0011201920282762937
+MEDI 0.9088562688382962
+=======================================================
+=======================================================
+Recommendation approach:  NeuMF
+==============================
+Sustainability Metrics =======
+AvgCarFI [kgCO2]: ============
+MEAN 7.7741485941430195
+STDD 0.413123632756395
+MEDI 7.800322357268006
+GIRec: =======================
+MEAN 0.07993215646914609
+STDD 0.007644403218864946
+MEDI 0.07897551148638607
+ECRec: =======================
+MEAN 0.00905482523214193
+STDD 0.0002360964587063985
+MEDI 0.009093667323753697
+ECTrain: =====================
+MEAN 9945.3857763
+STDD 54.77822602740744
+MEDI 9945.5118625
+ECPDat: ======================
+MEAN 0.10267900532010447
+STDD 0.0005655460620841365
+MEDI 0.10268030707007092
+AvgListDu: ===================
+MEAN 0.7836524924345483
+STDD 0.0013482183629421115
+MEDI 0.7835690105218835
+AvgSERu: =====================
+MEAN 0.03683075000000009
+STDD 0.010140410698723266
+MEDI 0.035949166666666754
+Conventional Metrics =========
+RMSE: ========================
+MEAN 0.9527120671001
+STDD 0.011600035848142972
+MEDI 0.9542855967547331
+Precision@K=10: ==============
+MEAN 0.8718587681083605
+STDD 0.002334722218228003
+MEDI 0.8718804640075688
+Recall@K=10: =================
+MEAN 0.9044696500228777
+STDD 0.01024509813973337
+MEDI 0.9073498006819448
+F1@K=10: =====================
+MEAN 0.8878457994704266
+STDD 0.005980921475531148
+MEDI 0.8890795756450718
 =======================================================
