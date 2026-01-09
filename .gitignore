@@ -1,2 +1,14 @@
 .venv
 .idea
+meta_Toys_and_Games.jsonl
+Toys_and_Games.jsonl
+
+extracted-products
+extracted-products-user-interaction
+ratings-data
+ratings-data-user-interaction
+lsh
+minhashes
+
+extracted-products-reduced-supplemented-1000
+ratings-data-reduced-1000
